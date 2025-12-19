@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: travelsphere-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: travelsphere-api
+  template:
+    metadata:
+      labels:
+        app: travelsphere-api
+    spec:
+      containers:
+        - name: api
+          image: travelsphere-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: AMADEUS_CLIENT_ID
+              value: "Ensim8AKWsDSSqJOBWv2POaND72SqD29"
+            - name: AMADEUS_CLIENT_SECRET
+              value: "QYsDK1AML4oFGCAQ"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5

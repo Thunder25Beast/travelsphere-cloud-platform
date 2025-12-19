@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  backend:
+    image: travelsphere-api
+    environment:
+      - AMADEUS_CLIENT_ID=${AMADEUS_CLIENT_ID}
+      - AMADEUS_CLIENT_SECRET=${AMADEUS_CLIENT_SECRET}
+    expose:
+      - "8000"
+
+  nginx:
+    build: ./nginx
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
