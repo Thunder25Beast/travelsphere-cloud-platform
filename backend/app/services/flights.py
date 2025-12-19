@@ -5,9 +5,12 @@ import requests
 
 AMADEUS_TOKEN_URL = "https://test.api.amadeus.com/v1/security/oauth2/token"
 AMADEUS_FLIGHT_URL = "https://test.api.amadeus.com/v2/shopping/flight-offers"
+EXCHANGE_RATE_URL = "https://api.exchangerate-api.com/v4/latest/{currency}"
 
 _cache = {}
 _CACHE_TTL = 300  # 5 minutes
+_exchange_cache = {}
+_EXCHANGE_CACHE_TTL = 3600  # 1 hour (rates don't change that often)
 
 def get_access_token():
     client_id = os.getenv("AMADEUS_CLIENT_ID")
@@ -31,6 +34,32 @@ def get_access_token():
         print("Amadeus token error:", response.status_code, response.text)
         raise
     return response.json().get("access_token")
+
+
+def get_exchange_rate(from_currency: str, to_currency: str) -> float:
+    """Fetch exchange rate with caching."""
+    cache_key = f"{from_currency}-{to_currency}"
+    
+    if cache_key in _exchange_cache:
+        rate, timestamp = _exchange_cache[cache_key]
+        if time.time() - timestamp < _EXCHANGE_CACHE_TTL:
+            return rate
+    
+    try:
+        response = requests.get(
+            EXCHANGE_RATE_URL.format(currency=from_currency),
+            timeout=5,
+        )
+        response.raise_for_status()
+        rates = response.json().get("rates", {})
+        rate = rates.get(to_currency, 1.0)
+        
+        _exchange_cache[cache_key] = (rate, time.time())
+        return rate
+    except Exception as e:
+        print(f"Exchange rate fetch error: {e}")
+        # Return 1.0 as fallback (no conversion)
+        return 1.0
 
 
 def get_flight_price(origin: str, destination: str, departure_date: str | None = None):
@@ -70,12 +99,34 @@ def get_flight_price(origin: str, destination: str, departure_date: str | None =
 
     data = response.json()["data"][0]
     price = float(data["price"]["total"])
+    original_currency = data["price"]["currency"]
+
+    # Convert to INR and EUR
+    conversions = {}
+    if original_currency != "INR":
+        inr_rate = get_exchange_rate(original_currency, "INR")
+        conversions["INR"] = {
+            "amount": round(price * inr_rate, 2),
+            "rate": round(inr_rate, 4)
+        }
+    
+    if original_currency != "EUR":
+        eur_rate = get_exchange_rate(original_currency, "EUR")
+        conversions["EUR"] = {
+            "amount": round(price * eur_rate, 2),
+            "rate": round(eur_rate, 4)
+        }
 
     result = {
         "origin": origin,
         "destination": destination,
-        "price": int(price),
-        "currency": data["price"]["currency"],
+        "price": {
+            "original": {
+                "amount": round(price, 2),
+                "currency": original_currency
+            },
+            "conversions": conversions
+        },
         "source": "amadeus",
     }
 

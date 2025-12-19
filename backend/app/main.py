@@ -29,8 +29,13 @@ def search(origin: str, destination: str, date: str | None = None):
         return {
             "origin": origin,
             "destination": destination,
-            "price": 5555,
-            "currency": "INR",
+            "price": {
+                "original": {
+                    "amount": 5555,
+                    "currency": "INR"
+                },
+                "conversions": {}
+            },
             "source": "fallback",
             "cached": True,
         }

@@ -1,6 +1,17 @@
 # TravelSphere — Cloud-Native Flight Pricing Platform
 
-TravelSphere is a cloud-native backend that serves real-time flight pricing using the Amadeus Flight Offers API. The project is intentionally built end-to-end to mirror production concerns: configuration, containerization, orchestration, ingress, secrets, caching, and failure handling. It documents the decisions, trade-offs, and debugging steps that typically arise in real systems.
+TravelSphere is a cloud-native backend that serves real-time flight pricing using the Amadeus Flight Offers API. Unlike tutorial projects that stop at "it runs on my machine," this platform addresses production concerns end-to-end: configuration management, containerization, orchestration, secrets handling, caching strategies, failure recovery, and deployment automation.
+
+## Why This Project Exists
+
+Most backend projects demonstrate basic CRUD operations. This project answers different questions:
+- How do real services integrate external APIs securely without leaking credentials?
+- What happens when containers don't see the same environment as the host?
+- Why does code that works locally fail in Docker or Kubernetes?
+- How does traffic actually flow through ingress controllers and load balancers?
+- Why is CI/CD mandatory for production systems rather than optional?
+
+This repository documents not just the working solution, but the debugging journey, architecture decisions, and lessons learned from real-world failure modes.
 
 ---
 
@@ -214,48 +225,87 @@ kubectl scale deployment travelsphere-backend --replicas=4
 
 ---
 
-## Common Issues and Fixes (what actually happened)
+## Real-World Challenges Faced & Solutions
 
-1) Import errors when running Uvicorn
-	- Symptom: `ModuleNotFoundError: No module named 'app'`
-	- Fix: Switch to relative imports in [backend/app/main.py](backend/app/main.py).
+### 1. Docker Image Immutability
+**Problem:** Code changes didn't reflect in running containers.  
+**Root cause:** Docker images are immutable snapshots; local edits require rebuilds.  
+**Solution:** Automated image rebuilds in CI/CD pipeline; validated the principle that containers enforce reproducible artifacts.
 
-2) Amadeus calls returning fallback
-	- Causes: missing credentials, past departure dates, or Amadeus sandbox errors.
-	- Fixes: load `.env`, add date parameter with future default, log HTTP errors for visibility.
+### 2. Environment Variable Isolation
+**Problem:** Local shell environment variables weren't visible inside containers.  
+**Root cause:** Container runtime has isolated environment; host exports don't propagate automatically.  
+**Solution:** Explicit `--env-file` for Docker, `env` blocks in Kubernetes manifests, and ConfigMaps/Secrets for production.
 
-3) Environment variables not seen in containers
-	- Lesson: container/runtime env is isolated; pass with `--env-file` or Kubernetes `env`/Secrets.
+### 3. Module Import Errors in Uvicorn
+**Problem:** `ModuleNotFoundError: No module named 'app'` when running as `backend.app.main`.  
+**Root cause:** Absolute imports assumed a top-level `app` package that didn't exist.  
+**Solution:** Switched to relative imports (`.services.flights`) to match the actual module hierarchy.
 
-4) Ingress 404s
-	- Cause: host/header mismatch with NGINX ingress default backend.
-	- Fix: ensure ingress host matches request or use port-forwarding during local tests.
+### 4. Amadeus API Returning Fallback Responses
+**Problem:** All searches returned static fallback data instead of live prices.  
+**Root causes:**
+- Missing `AMADEUS_CLIENT_ID` and `AMADEUS_CLIENT_SECRET` environment variables
+- Hardcoded past departure dates (2025-12-15) causing 400 errors
+- No error visibility in logs
 
-5) Windows vs WSL DNS quirks
-	- Browsers using DNS-over-HTTPS can bypass OS hosts; prefer curl inside WSL or set proper host headers.
+**Solution:**
+- Loaded `.env` via `python-dotenv` at app startup
+- Added optional `date` parameter with intelligent default (today + 14 days)
+- Logged HTTP status and response bodies for token/offer failures
+- Validated credentials are present before making requests
+
+### 5. Ingress 404 Errors
+**Problem:** Valid URLs returned 404 via ingress controller.  
+**Root cause:** Host header mismatch; NGINX ingress default backend rejects unknown hosts.  
+**Solution:** Used port-forwarding for local validation; documented that production ingress requires proper DNS/host configuration.
+
+### 6. Windows vs WSL DNS Behavior
+**Problem:** Adding `travelsphere.local` to Windows hosts file didn't work in browser.  
+**Root cause:** Modern browsers use DNS-over-HTTPS, bypassing OS hosts file.  
+**Solution:** Used `curl` inside WSL for testing; documented that local Kubernetes differs from cloud DNS resolution.
+
+### 7. GitHub Authentication with SSH
+**Problem:** Git push failed with "invalid username or token" despite correct password.  
+**Root cause:** GitHub deprecated password authentication for git operations.  
+**Solution:** Generated SSH key pair, added public key to GitHub, configured git to use SSH globally for all GitHub repos.
+
+Each of these issues represents a real gap between local development and production cloud systems—exactly the type of debugging that happens in actual engineering work.
 
 ---
 
-## Roadmap (planned)
+## What This Project Demonstrates
 
-- GitHub Actions CI: lint, test, Docker build, push to registry
-- Kubernetes Secrets for Amadeus credentials
-- Coolify-based VPS deployment with HTTPS
-- More endpoints (return trips, multi-city) and stronger validation
+**Cloud-Native Architecture**
+- Designing stateless services that can scale horizontally
+- External API integration with retry logic and graceful degradation
+- Environment-based configuration for portability across environments
 
----
+**Container & Orchestration Fundamentals**
+- Production-safe Dockerfile with layer caching and minimal attack surface
+- Kubernetes deployment patterns: replicas, probes, rolling updates
+- Service discovery and load balancing via ClusterIP services
+- Ingress-based traffic routing mirroring cloud load balancers
 
-## How to Explain This Project
+**Production Engineering Mindset**
+- Understanding that "works on my machine" ≠ production-ready
+- Debugging infrastructure issues, not just application code
+- Knowing when and why CI/CD eliminates manual deployment risks
+- Documentation that captures decisions and failure modes
 
-- Built a FastAPI service that integrates Amadeus with caching and graceful degradation.
-- Containerized with a slim Dockerfile; runs the same locally and in-cluster.
-- Kubernetes manifests showcase deployments, services, and ingress-style traffic flow.
-- Observability via Prometheus metrics and structured error logging for third-party calls.
-- Documented real-world debugging (imports, env propagation, ingress, DNS) to demonstrate production thinking.
+**Real System Integration**
+- OAuth2 client credentials flow for API authentication
+- Caching strategies to reduce external API costs and latency
+- Logging and metrics for observability in distributed systems
+- Fallback mechanisms for reliability under failure conditions
 
----
+This project was intentionally over-engineered for learning purposes. Every component exists to understand why modern cloud systems are designed the way they are.
+
 
 ## Author
 
-Lakshaditya Singh — Cloud engineering, backend systems, Kubernetes, DevOps.
+**Lakshaditya Singh**  
+Cloud Engineering | Backend Systems | Kubernetes | DevOps
+
+This project reflects real-world engineering practices: understanding failure modes, debugging infrastructure, and building systems that are reliable, observable, and maintainable. Every issue documented here was encountered and solved during development—no shortcuts, no templates, just systematic problem-solving.
 
