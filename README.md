@@ -1,4 +1,4 @@
-# TravelSphere — Cloud-Native Flight Pricing Platform
+# TravelSphere : Cloud-Native Flight Pricing Platform
 
 TravelSphere is a cloud-native backend that serves real-time flight pricing using the Amadeus Flight Offers API. Unlike tutorial projects that stop at "it runs on my machine," this platform addresses production concerns end-to-end: configuration management, containerization, orchestration, secrets handling, caching strategies, failure recovery, and deployment automation.
 
@@ -308,4 +308,5 @@ This project was intentionally over-engineered for learning purposes. Every comp
 Cloud Engineering | Backend Systems | Kubernetes | DevOps
 
 This project reflects real-world engineering practices: understanding failure modes, debugging infrastructure, and building systems that are reliable, observable, and maintainable. Every issue documented here was encountered and solved during development—no shortcuts, no templates, just systematic problem-solving.
+
 
